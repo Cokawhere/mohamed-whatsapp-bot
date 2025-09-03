@@ -1,0 +1,72 @@
+const welcomedParticipants = new Set();
+let welcomeActive = false;
+
+module.exports = {
+  command: 'ترحيب',
+  description: 'يرحب بالأعضاء الجدد عند انضمامهم إلى المجموعة.',
+  category: 'group',
+
+  async execute(sock, msg) {
+    const groupId = msg.key.remoteJid;
+
+    // إذا لم يكن الترحيب مفعل، نفعله عند أول تنفيذ للأمر ونرسل رسالة جاهزية
+    if (!welcomeActive) {
+      welcomeActive = true;
+      await sock.sendMessage(groupId, {
+        text: '✅ تم تفعيل الترحيب بالأعضاء الجدد.\n- اكتب "قفل الترحيب" لتعطيله.'
+      });
+
+      // تسجيل مستمع انضمام الأعضاء مرة واحدة فقط
+      sock.ev.on('group-participants.update', async (update) => {
+        if (!welcomeActive) return;
+        if (update.id !== groupId) return;
+        if (update.action !== 'add') return;
+
+        const groupMetadata = await sock.groupMetadata(groupId);
+        const groupName = groupMetadata.subject;
+
+        for (const participant of update.participants) {
+          if (welcomedParticipants.has(participant)) continue;
+
+          let ppUrl = await sock.profilePictureUrl(participant, 'image').catch(() => null);
+          if (!ppUrl) {
+            // إذا ما فيه صورة شخصية، جلب صورة المجموعة
+            ppUrl = await sock.profilePictureUrl(groupId, 'image').catch(() => null);
+          }
+
+          const welcomeMessage = `
+*❛ ━━━━━━･❪ ❁ ❫ ･━━━━━━ ❜*
+❒ *╭┈⊰* 🌷الــتــرحــيــب🌷 *⊰┈ ✦*
+*┊˹📯˼┊ اهــلا بـك/ي*
+┊˹🥷🏻˼┊ @${participant.split('@')[0]}
+┊📩 *اقرأ وصف المجموعة*
+
+> *منور الجروب ┊˹✅˼┊*
+*❛ ━━━━━━･❪ ❁ ❫ ･━━━━━━ ❜*
+> 𝑩𝛩𝑻 -𝑲 𝑰 𝑬 🌑
+`;
+
+          const media = ppUrl
+            ? { image: { url: ppUrl }, caption: welcomeMessage }
+            : { text: welcomeMessage };
+
+          await sock.sendMessage(groupId, {
+            ...media,
+            mentions: [participant]
+          });
+
+          welcomedParticipants.add(participant);
+          setTimeout(() => welcomedParticipants.delete(participant), 60000);
+        }
+      });
+    }
+
+    // التحقق من أوامر إغلاق الترحيب
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+    if (text && text.toLowerCase() === 'قفل الترحيب') {
+      welcomeActive = false;
+      welcomedParticipants.clear();
+      await sock.sendMessage(groupId, { text: '⛔ تم تعطيل الترحيب بالأعضاء الجدد.' });
+    }
+  }
+};
