@@ -4,7 +4,9 @@
   "description": "WhatsApp Bot",
   "main": "main.js",
   "scripts": {
-    "start": "node main.js"
+    "start": "node main.js",
+    "build": "npm install --legacy-peer-deps"
+
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.4.0",
